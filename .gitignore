@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+*.bak
+.claude/settings.local.json
+.mcp.json
