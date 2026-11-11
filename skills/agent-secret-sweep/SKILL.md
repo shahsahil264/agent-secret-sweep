@@ -56,7 +56,7 @@ Follow this skill and the agent keeps working normally afterwards:
 ### 1. Scan (read-only)
 
 ```bash
-python3 scripts/scan.py ~/code --depth 6 --json /tmp/sweep.json
+python3 "${CLAUDE_SKILL_DIR}"/scripts/scan.py ~/code --depth 6 --json /tmp/sweep.json
 ```
 
 Give it the directories that hold your projects. `--all` also prints
@@ -99,13 +99,13 @@ malware-exposure risk; do not "fix" it by breaking it.
 Show the masked findings and the exact rules that would go. Preview first:
 
 ```bash
-python3 scripts/remediate.py /tmp/sweep.json
+python3 "${CLAUDE_SKILL_DIR}"/scripts/remediate.py /tmp/sweep.json
 ```
 
 Get the user's agreement, then apply:
 
 ```bash
-python3 scripts/remediate.py /tmp/sweep.json --apply --gitignore
+python3 "${CLAUDE_SKILL_DIR}"/scripts/remediate.py /tmp/sweep.json --apply --gitignore
 ```
 
 Add `--untrack` to run `git rm --cached` on credential stores that are
@@ -128,7 +128,7 @@ are theirs, and that they are publishing a change to a shared repo.
 ```bash
 python3 -c "import json,sys; json.load(open(sys.argv[1]))" <settings file>
 claude mcp list                              # expect: no missing-variable warnings
-python3 scripts/scan.py <root> --depth 6     # expect: no findings
+python3 "${CLAUDE_SKILL_DIR}"/scripts/scan.py <root> --depth 6     # expect: no findings
 ```
 
 `claude mcp list` is the real test after touching anything MCP-related: it
@@ -178,9 +178,9 @@ and so should you.
 
 ## Files
 
-- `scripts/scan.py` - read-only discovery, detection and exposure grading
-- `scripts/remediate.py` - preview/apply removal, with rollback and backups
-- `scripts/patterns.py` - detection patterns and false-positive suppression
+- `${CLAUDE_SKILL_DIR}/scripts/scan.py` - read-only discovery, detection and exposure grading
+- `${CLAUDE_SKILL_DIR}/scripts/remediate.py` - preview/apply removal, with rollback and backups
+- `${CLAUDE_SKILL_DIR}/scripts/patterns.py` - detection patterns and false-positive suppression
 
 ## Source
 

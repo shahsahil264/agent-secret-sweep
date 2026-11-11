@@ -1,0 +1,14 @@
+{
+  "name": "agent-secret-sweep",
+  "owner": { "name": "shahsahil264" },
+  "description": "Security tooling for coding agents - find and clean leaked credentials",
+  "plugins": [
+    {
+      "name": "agent-secret-sweep",
+      "source": "./",
+      "description": "Scan .claude settings, MCP configs and agent memory files for leaked credentials, then clean them up without disturbing the agent",
+      "category": "security",
+      "tags": ["secrets", "credentials", "scanning", "git-hygiene"]
+    }
+  ]
+}

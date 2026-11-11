@@ -24,10 +24,39 @@ Any output is a credential saved on disk by a "don't ask again" click.
 
 ## Install
 
+In Claude Code (v2.1.275+), one line:
+
+```
+/plugin install agent-secret-sweep --marketplace shahsahil264/agent-secret-sweep
+```
+
+<details>
+<summary>Older Claude Code, or prefer two steps</summary>
+
+```
+/plugin marketplace add shahsahil264/agent-secret-sweep
+/plugin install agent-secret-sweep@agent-secret-sweep
+```
+
+Or from your shell:
+
+```bash
+claude plugin marketplace add shahsahil264/agent-secret-sweep
+claude plugin install agent-secret-sweep@agent-secret-sweep
+```
+
+Third-party marketplaces do not auto-update — run `/plugin marketplace update`
+to pick up new versions.
+</details>
+
+<details>
+<summary>No plugin system — just copy the folder</summary>
+
 ```bash
 git clone https://github.com/shahsahil264/agent-secret-sweep
-cp -r agent-secret-sweep/skill ~/.claude/skills/agent-secret-sweep
+cp -r agent-secret-sweep/skills/agent-secret-sweep ~/.claude/skills/
 ```
+</details>
 
 Then just ask Claude, in plain English:
 
@@ -157,7 +186,7 @@ read "gitignored" as "safe" and here it often isn't.
 ```yaml
 - name: Check for agent-leaked secrets
   run: |
-    python3 skill/scripts/scan.py . --depth 8
+    python3 skills/agent-secret-sweep/scripts/scan.py . --depth 8
     # exits non-zero on critical/high findings
 ```
 
@@ -183,7 +212,7 @@ name like `CHAI_API_HEADER`, or use `headersHelper`. Verify with
 
 New detection patterns are very welcome — especially embedded-credential
 shapes for tools not covered yet. Add the pattern to
-`skill/scripts/patterns.py` and a true/false-positive case to the regression
+`skills/agent-secret-sweep/scripts/patterns.py` and a true/false-positive case to the regression
 set in the README of your PR.
 
 ## Credits

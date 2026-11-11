@@ -1,0 +1,10 @@
+{
+  "name": "agent-secret-sweep",
+  "version": "0.1.0",
+  "description": "Find and clean credentials that coding agents wrote into their own config and memory files, without breaking the agent",
+  "author": { "name": "shahsahil264" },
+  "homepage": "https://github.com/shahsahil264/agent-secret-sweep",
+  "repository": "https://github.com/shahsahil264/agent-secret-sweep",
+  "license": "Apache-2.0",
+  "keywords": ["security", "secrets", "credentials", "scanning", "mcp", "git"]
+}
