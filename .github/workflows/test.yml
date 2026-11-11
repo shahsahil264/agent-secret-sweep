@@ -13,6 +13,14 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         python: ["3.9", "3.12", "3.13"]
+        exclude:
+          # ubuntu-latest (26.04) no longer ships Python 3.9
+          - os: ubuntu-latest
+            python: "3.9"
+        include:
+          # ...so prove the 3.9 floor on the last Ubuntu that has it
+          - os: ubuntu-22.04
+            python: "3.9"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
