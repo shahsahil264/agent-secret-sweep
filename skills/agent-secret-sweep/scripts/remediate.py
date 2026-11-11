@@ -231,9 +231,14 @@ def strip_rules(document: Any, doomed: Sequence[str]) -> tuple[Any, list[str]]:
         rules = permissions.get(key)
         if not isinstance(rules, list):
             continue
-        kept = [r for r in rules if r not in doomed_set]
-        removed.extend(r for r in rules if r in doomed_set)
-        new_permissions[key] = kept
+        # A hand-edited or corrupted file can hold non-string entries. They
+        # are never targets, and `dict in set` would raise TypeError, so
+        # membership is only ever tested for strings.
+        doomed_here = [r for r in rules if isinstance(r, str) and r in doomed_set]
+        new_permissions[key] = [
+            r for r in rules if not (isinstance(r, str) and r in doomed_set)
+        ]
+        removed.extend(doomed_here)
     return {**document, "permissions": new_permissions}, removed
 
 

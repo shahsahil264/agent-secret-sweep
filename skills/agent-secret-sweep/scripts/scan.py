@@ -324,10 +324,25 @@ def main(argv: Sequence[str] | None = None) -> int:
                 for r in reports
             ],
         }
-        Path(args.json_out).write_text(json.dumps(payload, indent=2))
-        print(f"  Full report: {args.json_out}\n")
+        # The report must keep each rule verbatim so remediation can match
+        # and remove it - which makes the report itself a credential file.
+        # Lock it down and say so, rather than leaving a world-readable copy
+        # in a shared temp directory.
+        out = Path(args.json_out)
+        out.write_text(json.dumps(payload, indent=2))
+        try:
+            out.chmod(0o600)
+        except OSError:
+            pass
+        print(f"  Full report: {out}")
+        print("  WARNING: that report holds the secrets in cleartext "
+              "(mode 600). Delete it when you are done.\n")
 
-    return 1 if any(r.severity in ("critical", "high") for r in reports) else 0
+    confirmed = any(
+        f["verdict"] == "secret" for r in reports for f in r.findings
+    )
+    high = any(r.severity in ("critical", "high") for r in reports)
+    return 1 if (confirmed or high) else 0
 
 
 if __name__ == "__main__":
