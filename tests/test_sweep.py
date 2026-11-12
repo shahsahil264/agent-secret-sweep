@@ -478,3 +478,52 @@ def test_file_report_severity_matches_grade() -> None:
     report = FileReport(path="/x", git=GitFacts(repo_root="/r", tracked=True),
                         findings=({"verdict": "secret"},))
     assert report.severity == "critical"
+
+
+# --- only a committed .gitignore actually protects a clone -----------------
+# Raised by Christopher Alfonso: a repo can point core.excludesFile at another
+# file, so your rule looks active locally but the config is never committed.
+
+@pytest.mark.unit
+@pytest.mark.parametrize("ignored_by,travels,why", [
+    (".gitignore", True, "committed, honoured by default"),
+    ("sub/.gitignore", True, "nested .gitignore is committed too"),
+    ("/home/u/.config/git/ignore", False, "global file, per-machine"),
+    ("/r/.git/info/exclude", False, "per-clone, never committed"),
+    (".gitignore-extra", False, "core.excludesFile config is not committed"),
+    ("custom-ignores", False, "same, without a suggestive name"),
+])
+def test_only_committed_gitignore_counts_as_travelling(
+    ignored_by: str, travels: bool, why: str
+) -> None:
+    git = GitFacts(repo_root="/r", ignored=True, ignored_by=ignored_by)
+    assert git.ignore_travels is travels, why
+    if not travels:
+        assert grade(git, [{"verdict": "secret"}]) == "high", why
+
+
+@pytest.mark.integration
+def test_excludesfile_override_is_not_treated_as_safe(tmp_path: Path) -> None:
+    """End-to-end version of the same trap, against real git."""
+    from scan import git_facts
+
+    repo = tmp_path / "repo"
+    (repo / ".claude").mkdir(parents=True)
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    target = repo / ".claude" / "settings.local.json"
+    target.write_text("{}")
+    (repo / ".gitignore-extra").write_text(".claude/settings.local.json\n")
+    subprocess.run(["git", "config", "core.excludesFile", ".gitignore-extra"],
+                   cwd=repo, check=True)
+
+    facts = git_facts(target)
+    assert facts.ignored is True, "git does consider it ignored locally"
+    assert facts.ignore_travels is False, "but the rule would not reach a clone"
+
+
+@pytest.mark.unit
+def test_git_facts_survives_unresolved_paths(tmp_path: Path) -> None:
+    """Symlinked roots (macOS /tmp -> /private/tmp) must not crash the scan."""
+    from scan import git_facts
+
+    assert git_facts(tmp_path / "nowhere" / "settings.local.json") is not None

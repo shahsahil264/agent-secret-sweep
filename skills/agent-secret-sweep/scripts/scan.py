@@ -80,11 +80,23 @@ class GitFacts:
 
     @property
     def ignore_travels(self) -> bool:
-        """True only when the ignore rule ships with the repository."""
+        """True only when the ignore rule ships with the repository.
+
+        Only a committed `.gitignore` travels. Three sources do not, and all
+        three look reassuring locally:
+
+          - the user's global ignore file (absolute path)
+          - .git/info/exclude (per-clone, never committed)
+          - any file named by `core.excludesFile`, even one inside the repo,
+            because the git config that activates it is not committed - so a
+            clone silently loses the rule
+        """
         if not self.ignored or not self.ignored_by:
             return False
         source = Path(self.ignored_by)
-        return not source.is_absolute() and ".git/info/exclude" not in self.ignored_by
+        if source.is_absolute() or ".git/info/exclude" in self.ignored_by:
+            return False
+        return source.name == ".gitignore"
 
 
 @dataclass(frozen=True)
@@ -152,8 +164,13 @@ def git_facts(path: Path) -> GitFacts:
     if code != 0 or not root:
         return GitFacts()
 
-    repo = Path(root)
-    rel = str(path.relative_to(repo))
+    # Both sides must be resolved: on macOS /tmp is a symlink to /private/tmp,
+    # so an unresolved path is not a subpath of what git reports.
+    repo = Path(root).resolve()
+    try:
+        rel = str(path.resolve().relative_to(repo))
+    except ValueError:
+        return GitFacts()
     tracked = _git(["ls-files", "--error-unmatch", rel], repo)[0] == 0
     ign_code, ign_out = _git(["check-ignore", "-v", "--", rel], repo)
     has_remote = bool(_git(["remote"], repo)[1])
