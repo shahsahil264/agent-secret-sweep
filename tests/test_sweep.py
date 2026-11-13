@@ -38,6 +38,12 @@ def _cred(*parts: str) -> str:
     means every other secret scanner flags them too. Joining fragments at
     runtime keeps no scannable literal in the source, without weakening
     the tests: the assembled value is a full, realistic credential.
+
+    Some scanners honour an inline allow-list marker instead - Red Hat's
+    leaktk, for example, skips any line containing the word "notsecret".
+    That is simpler, but it only quiets the one scanner that knows the
+    marker. This repo is public, so fixtures are kept out of the source
+    entirely and every scanner stays quiet.
     """
     return "".join(parts)
 
