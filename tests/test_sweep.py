@@ -29,14 +29,49 @@ from scan import (  # noqa: E402
 )
 import scan as scan_mod  # noqa: E402
 
+
+
+def _cred(*parts: str) -> str:
+    """Assemble a synthetic credential at runtime.
+
+    Fixtures have to look real enough to exercise the detectors, which
+    means every other secret scanner flags them too. Joining fragments at
+    runtime keeps no scannable literal in the source, without weakening
+    the tests: the assembled value is a full, realistic credential.
+    """
+    return "".join(parts)
+
+
+def _uri(scheme: str, user: str, password: str, host: str) -> str:
+    """Build a credential-bearing URI at runtime, for the same reason."""
+    return f"{scheme}://{user}:{password}@{host}"
+
+
+GH_TOKEN = _cred("ghp", "_aBcDeFgHiJkLmNo", "PqRsTuVwXyZ0123456789")
+OPENAI_KEY = _cred("sk", "-abcdefghijklmnop", "qrstuvwxyz012345")
+AWS_KEY = _cred("AKI", "AZ3QW7TRBN2", "PLUXKD")
+PG_PW = _cred("Qx9", "!mLp2", "zK")
+PG_PW2 = _cred("Qx9", "mLp2", "zK")
+PG_PW3 = _cred("Qx9", "mLp", "2z")
+SSH_PW = _cred("Zz9", "!qq", "W3x")
+SSH_PW2 = _cred("Zz9", "qq", "W3x")
+URI_PW = _cred("Pw9", "x!2", "Lm")
+ES_PW = _cred("Pw9", "x2Qz7", "kk")
+MYSQL_PW = _cred("R8!", "kdo", "wq")
+LONG_PW = _cred("Tr0ub", "4dor83", "xQ")
+LONG_PW2 = _cred("Tr0ub", "4dor", "83x")
+LOCAL_PW = _cred("local", "pw", "123")
+AWS_DOC_KEY = _cred("AKI", "AIOSFODNN7", "EXAMPLE")
+UNICODE_PW = _cred("паро", "ль", "123")
+
 REAL_SECRETS = [
-    "PGPASSWORD=Qx9!mLp2zK psql -h db.prod.example.io -U admin",
-    "sshpass -p Zz9!qqW3x ssh root@198.51.100.4",
-    "ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789",
-    "postgresql://svc:Pw9x!2Lm@db.acme.io:5432/app",
-    "curl -H 'Authorization: Bearer sk-abcdefghijklmnopqrstuvwxyz012345'",
-    "AKIAZ3QW7TRBN2PLUXKD",
-    "MYSQL_PWD=R8!kdowq mysql -h mysql.acme.io",
+    f"PGPASSWORD={PG_PW} psql -h db.prod.example.io -U admin",
+    f"sshpass -p {SSH_PW} ssh root@198.51.100.4",
+    GH_TOKEN,
+    _uri("postgresql", "svc", URI_PW, "db.acme.io:5432/app"),
+    f"curl -H 'Authorization: Bearer {OPENAI_KEY}'",
+    AWS_KEY,
+    f"MYSQL_PWD={MYSQL_PW} mysql -h mysql.acme.io",
 ]
 
 BENIGN = [
@@ -51,7 +86,7 @@ BENIGN = [
     "export KEY=<your-key>",
     "Bash(docker compose up -d)",
     "Bash(gh pr list --limit 10)",
-    "AKIAIOSFODNN7EXAMPLE",
+    AWS_DOC_KEY,   # AWS's own published example key - must be suppressed
 ]
 
 
@@ -71,13 +106,13 @@ def test_benign_strings_are_not_flagged(text: str) -> None:
 @pytest.mark.unit
 def test_private_host_downgrades_to_review() -> None:
     """A credential aimed only at localhost is reported, not called a secret."""
-    out = scan_text("PGPASSWORD=localpw123 psql -h localhost -U postgres", "t")
+    out = scan_text(f"PGPASSWORD={LOCAL_PW} psql -h localhost -U postgres", "t")
     assert out and all(f["verdict"] == "review" for f in out)
 
 
 @pytest.mark.unit
 def test_secret_value_never_appears_in_output() -> None:
-    secret = "Tr0ub4dor83xQ"
+    secret = LONG_PW
     for finding in scan_text(f"PGPASSWORD={secret} psql -h db.acme.io", "t"):
         assert secret not in finding["excerpt"]
         assert secret not in finding["masked"]
@@ -87,7 +122,7 @@ def test_secret_value_never_appears_in_output() -> None:
 @pytest.mark.parametrize("value,expected", [
     ("$DB_PASS", True), ("${DB_PASS}", True), ("changeme", True),
     ("your-key-here", True), ("********", True), ("short", True),
-    ("Qx9!mLp2zK", False),
+    (PG_PW, False),
 ])
 def test_placeholder_detection(value: str, expected: bool) -> None:
     assert is_placeholder(value) is expected
@@ -174,7 +209,7 @@ def test_strip_rules_survives_malformed_documents(doc: dict) -> None:
 
 @pytest.mark.unit
 @pytest.mark.parametrize("text", [
-    "", "A" * 10_000, "PGPASSWORD=пароль123 psql -h db.acme.io 🔑",
+    "", "A" * 10_000, f"PGPASSWORD={UNICODE_PW} psql -h db.acme.io 🔑",
     "tok\x00en=abcdefgh", "password=((((*+?[", "\n\n\t  ",
 ])
 def test_scanner_survives_hostile_text(text: str) -> None:
@@ -205,7 +240,7 @@ def test_end_to_end_cleans_secret_and_keeps_everything_else(tmp_path: Path) -> N
         "permissions": {
             "allow": [
                 "Bash(npm run build)",
-                "Bash(PGPASSWORD=Tr0ub4dor83x psql -h db.acme.io -U admin)",
+                f"Bash(PGPASSWORD={LONG_PW2} psql -h db.acme.io -U admin)",
             ],
             "deny": [],
         },
@@ -238,7 +273,7 @@ def test_credential_store_is_never_edited(tmp_path: Path) -> None:
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
     mcp = repo / ".mcp.json"
     mcp.write_text(json.dumps({"mcpServers": {"o": {"command": "x", "env": {
-        "ES": "https://u:Pw9x2Qz7kk@es.acme.io:443"}}}}))
+        "ES": _uri("https", "u", ES_PW, "es.acme.io:443")}}}}))
     before = hashlib.sha256(mcp.read_bytes()).hexdigest()
 
     report = tmp_path / "r.json"
@@ -309,7 +344,7 @@ def test_iter_json_strings_walks_nested_structures() -> None:
 @pytest.mark.unit
 def test_scan_file_falls_back_to_lines_for_broken_json(tmp_path: Path) -> None:
     broken = tmp_path / "settings.json"
-    broken.write_text('{ "allow": [ "PGPASSWORD=Qx9mLp2zK psql -h db.acme.io" ,,,')
+    broken.write_text('{ "allow": [ "PGPASSWORD=' + PG_PW2 + ' psql -h db.acme.io" ,,,')
     findings = scan_file(broken)
     assert any(f["verdict"] == "secret" for f in findings)
     assert all(f["container"] == "text" for f in findings)
@@ -336,7 +371,7 @@ def test_discover_finds_targets_and_skips_noise(tmp_path: Path) -> None:
 def _settings(tmp_path: Path) -> Path:
     path = tmp_path / "settings.local.json"
     path.write_text(json.dumps({
-        "permissions": {"allow": ["Bash(ls)", "Bash(PGPASSWORD=Qx9mLp2z psql -h db.acme.io)"]},
+        "permissions": {"allow": ["Bash(ls)", f"Bash(PGPASSWORD={PG_PW3} psql -h db.acme.io)"]},
         "env": {"KEEP": "me"},
     }))
     return path
@@ -346,7 +381,7 @@ def _settings(tmp_path: Path) -> Path:
 def test_apply_to_json_dry_run_writes_nothing(tmp_path: Path) -> None:
     path = _settings(tmp_path)
     before = path.read_bytes()
-    out = apply_to_json(path, ["Bash(PGPASSWORD=Qx9mLp2z psql -h db.acme.io)"], dry=True)
+    out = apply_to_json(path, [f"Bash(PGPASSWORD={PG_PW3} psql -h db.acme.io)"], dry=True)
     assert out.status == "would-remove"
     assert path.read_bytes() == before
 
@@ -354,7 +389,7 @@ def test_apply_to_json_dry_run_writes_nothing(tmp_path: Path) -> None:
 @pytest.mark.unit
 def test_apply_to_json_removes_and_keeps_the_rest(tmp_path: Path) -> None:
     path = _settings(tmp_path)
-    out = apply_to_json(path, ["Bash(PGPASSWORD=Qx9mLp2z psql -h db.acme.io)"], dry=False)
+    out = apply_to_json(path, [f"Bash(PGPASSWORD={PG_PW3} psql -h db.acme.io)"], dry=False)
     assert out.status == "cleaned"
     doc = json.loads(path.read_text())
     assert doc["permissions"]["allow"] == ["Bash(ls)"]
@@ -424,7 +459,7 @@ def test_suggest_replacement_is_only_a_suggestion(rule: str, expect: str) -> Non
 
 @pytest.mark.unit
 def test_summary_masks_secrets(tmp_path: Path, capsys) -> None:
-    secret = "Tr0ub4dor83xQ"
+    secret = LONG_PW
     path = tmp_path / ".claude" / "settings.local.json"
     path.parent.mkdir()
     path.write_text(json.dumps({"permissions": {"allow": [
@@ -454,7 +489,7 @@ def test_cli_exit_code_signals_real_findings(tmp_path: Path) -> None:
     dirty = tmp_path / "dirty" / ".claude"
     dirty.mkdir(parents=True)
     (dirty / "settings.local.json").write_text(json.dumps({"permissions": {"allow": [
-        "Bash(PGPASSWORD=Qx9mLp2zK psql -h db.acme.io -U admin)"]}}))
+        f"Bash(PGPASSWORD={PG_PW2} psql -h db.acme.io -U admin)"]}}))
     assert scan_mod.main([str(tmp_path), "--depth", "4"]) == 1
 
 
@@ -463,7 +498,7 @@ def test_cli_writes_json_report(tmp_path: Path) -> None:
     conf = tmp_path / "p" / ".claude"
     conf.mkdir(parents=True)
     (conf / "settings.local.json").write_text(json.dumps({"permissions": {"allow": [
-        "Bash(sshpass -p Zz9qqW3x ssh root@198.51.100.4)"]}}))
+        f"Bash(sshpass -p {SSH_PW2} ssh root@198.51.100.4)"]}}))
     out = tmp_path / "report.json"
     scan_mod.main([str(tmp_path), "--depth", "4", "--json", str(out)])
     payload = json.loads(out.read_text())
@@ -527,3 +562,34 @@ def test_git_facts_survives_unresolved_paths(tmp_path: Path) -> None:
     from scan import git_facts
 
     assert git_facts(tmp_path / "nowhere" / "settings.local.json") is not None
+
+
+# --- the repo must not trip anyone else's secret scanner ------------------
+# Red Hat InfoSec flagged this test file: fixtures realistic enough to
+# exercise the detectors are, by construction, realistic enough to look like
+# real leaks. Fixtures are assembled at runtime so no scannable literal is
+# ever committed. This guards that property.
+
+SCANNER_PATTERNS = {
+    "aws-key": r"\b(?:AKIA|ASIA|AROA|AIDA)[0-9A-Z]{16}\b",
+    "url-user-password": r"[a-z]+://[A-Za-z0-9._-]+:[^@/\s\"'{]{3,}@",
+    "github-token": r"\bghp_[A-Za-z0-9]{36}\b",
+    "openai-key": r"\bsk-[A-Za-z0-9]{32,}\b",
+    "private-key": r"-----BEGIN [A-Z ]*PRIVATE KEY-----",
+}
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("name,pattern", sorted(SCANNER_PATTERNS.items()))
+def test_no_scannable_literal_is_committed(name: str, pattern: str) -> None:
+    import re as _re
+
+    root = Path(__file__).resolve().parent.parent
+    offenders = []
+    for path in list(root.rglob("*.py")) + list(root.rglob("*.md")):
+        if ".venv" in path.parts or ".git" in path.parts:
+            continue
+        for number, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
+            if _re.search(pattern, line):
+                offenders.append(f"{path.relative_to(root)}:{number}")
+    assert not offenders, f"{name} literal committed at: {offenders}"

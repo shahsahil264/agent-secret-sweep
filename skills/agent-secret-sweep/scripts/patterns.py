@@ -78,9 +78,14 @@ PLACEHOLDER_EXACT: tuple[str, ...] = (
 )
 
 # A value that is really a shell/env indirection is the FIX, not the problem.
+# A value that is really a reference to a value elsewhere is the fix, not the
+# problem. Covers shell ($VAR, ${VAR}, $(cmd), `cmd`), Windows (%VAR%), and
+# template placeholders ({VAR}, {{VAR}}) as used by f-strings, Helm, Jinja,
+# docker-compose and CI config.
 INDIRECTION_RE = re.compile(
     r"^(?:\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|%[A-Za-z_][A-Za-z0-9_]*%"
-    r"|\$\([^)]*\)|`[^`]*`)$"
+    r"|\$\([^)]*\)|`[^`]*`"
+    r"|\{\{?\s*[A-Za-z_][A-Za-z0-9_.\-]*\s*\}?\})$"
 )
 
 LOCAL_HOST_RE = re.compile(

@@ -93,7 +93,7 @@ Requires Python 3.9+. Nothing to `pip install`.
                 even if you delete the file
       git: tracked,in-history,has-remote  (repo /Users/you/project)
       - SECRET uri-credentials: Bes********t8 -> search-prod.us-east-1.es.amazonaws.com
-        at $.mcpServers.orion.env.ES_SERVER: https://svc:Bes********t8@search-prod...
+        at $.mcpServers.orion.env.ES_SERVER
 
   [HIGH] /Users/you/other/.claude/settings.local.json
       exposure: in a git repo with no .gitignore rule that travels -
